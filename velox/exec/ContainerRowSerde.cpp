@@ -35,6 +35,27 @@ void serializeSwitch(
     vector_size_t index,
     ByteStream& out);
 
+/// anno: for serializeOne api, has several conditions for different TypeKind:
+///  - VARCHAR/VARBINARY: treat as SimpleVector<StringView>, write size and
+///     string contents;
+///  - ROW: write each row's columns' null conditions, and then write each
+///     column on by one with serializeOne. Note that each of row's column
+///    (children) is a separate BaseVector.
+///  - ARRAY: in an ArrayVector, all the ArrayElements are stored in a shared
+///     BaseVector (elements_), and each ArrayElement might has different
+///     size, which means each ArrayElement is a range in the elements_ vector.
+///     each ArrayElement's size and offset are recorded. When serializing,
+///     the ArrayElement's size and offset are extracted, and the components
+///     within the ArrayElement range are serialized recursively.
+///  - MAP: an MapVector acts like an ArrayVector (both of them are subclasses
+///     of ArrayVectorBase), except that each MapElement has two element ranges:
+///     MapElement KEY components (stored in BaseVector keys_), and VALUE
+///     components (stored in BaseVector values_). Each MapElement has its
+///     offset and size to indicate the MapElement's range in keys_ and values_.
+///     When serializing, each of the MapElement's keys_ component is serialized,
+///     then each of the MapElement's values_ component is serialized.
+///  - others: treat as SimpleVector<Kind::NativeType>, write as native type
+///     directly (as SimpleVectors could be accessed directly with valueAt).
 template <TypeKind Kind>
 void serializeOne(
     const BaseVector& vector,

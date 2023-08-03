@@ -127,6 +127,10 @@ class DestinationBuffer {
   uint64_t notifyMaxBytes_{0};
 };
 
+/// anno: the manage hierachy is :
+/// PartitionedOutputBufferManager : Singleton, has all taskIds' PartitionedBuffer
+/// -> PartitionedOutputBuffer : For each taskId, has all the destination buffer
+/// ----> DestinationBuffer: For each destination, contains the bufferData
 class PartitionedOutputBuffer {
  public:
   enum class Kind {
@@ -336,6 +340,8 @@ class PartitionedOutputBufferManager {
   // acknowledge method is offered for an early ack, so that the
   // producer can continue before the consumer is done processing the
   // received data.
+  /// anno: the data is consumed with this getData api. the cosumption logic
+  ///  is within the notify callback.
   bool getData(
       const std::string& taskId,
       int destination,

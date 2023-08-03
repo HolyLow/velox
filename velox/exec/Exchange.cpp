@@ -106,6 +106,7 @@ class LocalExchangeSource : public ExchangeSource {
                     << requestedSequence;
             int64_t nExtra = requestedSequence - sequence;
             VELOX_CHECK(nExtra < data.size());
+            /// anno: todo: what does this erase operation mean?
             data.erase(data.begin(), data.begin() + nExtra);
             sequence = requestedSequence;
           }

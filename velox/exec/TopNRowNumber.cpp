@@ -41,6 +41,11 @@ TopNRowNumber::TopNRowNumber(
   const auto numKeys = keys.size();
 
   if (numKeys > 0) {
+    /// anno: the accumulator here is for placeholder. the RowContainer's rowdata
+    ///  distribution is like: dat_col0 - ... - dat_colN - dat_accumulator,
+    ///  so the row would reserve the space for the 'accumulator', which is of
+    ///  size TopRows. The reserved size would be used to store the row's
+    ///  TopRows info.
     Accumulator accumulator{true, sizeof(TopRows), false, 1, [](auto) {}};
 
     table_ = std::make_unique<HashTable<false>>(

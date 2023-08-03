@@ -164,6 +164,11 @@ class DecodedVector {
 
   /// Given a top-level row returns corresponding index in the base vector or
   /// data().
+  /// anno: the decoded vector has different modes. in constantMapping mode,
+  ///  all the values are the same, and all the value idx is the same; in
+  ///  identityMapping mode, the mapping is direct one-to-one, so return the
+  ///  idx directly; otherwise, the decoded vector might has various vectors,
+  ///  so each value should has its individual idx.
   vector_size_t index(vector_size_t idx) const {
     if (isIdentityMapping_) {
       return idx;

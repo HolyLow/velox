@@ -31,6 +31,7 @@ BlockingReason Destination::advance(
     *atEnd = true;
     return BlockingReason::kNotBlocked;
   }
+  /// anno: todo: what does targeSizePct_ mean?
   uint32_t adjustedMaxBytes = std::max(
       PartitionedOutput::kMinDestinationSize,
       (maxBytes * targetSizePct_) / 100);
@@ -46,6 +47,7 @@ BlockingReason Destination::advance(
     }
     if (bytesInCurrent_ >= adjustedMaxBytes ||
         row_ - firstRow >= targetNumRows_) {
+      /// anno: the data in output is serailized to current_
       serialize(output, firstRow, row_ + 1);
       if (row_ == rows_.size() - 1) {
         *atEnd = true;
@@ -139,6 +141,7 @@ PartitionedOutput::PartitionedOutput(
 
 void PartitionedOutput::initializeInput(RowVectorPtr input) {
   input_ = std::move(input);
+  /// anno: Q: why is this?
   if (outputChannels_.empty()) {
     output_ = input_;
   } else {
@@ -256,6 +259,7 @@ void PartitionedOutput::collectNullRows() {
   nullRows_.resize(size);
   nullRows_.clearAll();
 
+  /// anno: todo: how is decodedVector_ used here?
   decodedVectors_.resize(keyChannels_.size());
 
   for (auto i : keyChannels_) {
@@ -263,6 +267,7 @@ void PartitionedOutput::collectNullRows() {
     if (keyVector->mayHaveNulls()) {
       decodedVectors_[i].decode(*keyVector, rows_);
       if (auto* rawNulls = decodedVectors_[i].nulls()) {
+        /// anno: figure out why is the orWithNEGATEDbits....
         bits::orWithNegatedBits(
             nullRows_.asMutableRange().bits(), rawNulls, 0, size);
       }

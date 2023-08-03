@@ -411,6 +411,15 @@ void RowContainer::extractString(
   values->setNoCopy(index, StringView(rawBuffer, value.size()));
 }
 
+/// anno: the complexType is stored with a ByteStream. A ByteStream is a linked
+///  list where each list node is a Position. the stringAllocator.newWrite()
+///  would return the *head position* of the (current writing) ByteStream,
+///  the stringAllocator.extendWrite() would extend the list, and the
+///  stringAllocator.finishWrite() would mark the list as completed.
+///  The *current writing position* is stored within the stringAllocator so
+///  *only one* ByteStream could be on writing at the same time.
+///  Finally, the *head position* would be stored in the row + offset to seek
+///  the ByteStream's content.
 void RowContainer::storeComplexType(
     const DecodedVector& decoded,
     vector_size_t index,

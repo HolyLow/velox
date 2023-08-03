@@ -109,6 +109,8 @@ class VectorLoader {
 // Unloaded LazyVectors should be referenced only by one top-level vector.
 // Otherwise, it runs the risk of being loaded for different set of rows by each
 // top-level vector.
+/// In the annotation above, why it would run the risk of being
+/// loaded by different set of rows???
 class LazyVector : public BaseVector {
  public:
   LazyVector(

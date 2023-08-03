@@ -297,6 +297,7 @@ class BaseVector {
   /**
    * @return the hash of the value at the given index in this vector
    */
+   /// anno: the vector must provide hash computing functionality...
   virtual uint64_t hashValueAt(vector_size_t index) const = 0;
 
   /**

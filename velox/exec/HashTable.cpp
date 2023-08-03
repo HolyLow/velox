@@ -1747,6 +1747,9 @@ void HashTable<ignoreNullKeys>::checkConsistency() const {
 template class HashTable<true>;
 template class HashTable<false>;
 
+/// anno: in this function, the data are decoded into the hashers' decodedVector,
+///  the HashLookUp is reset (cleanup & resize), and the hash values are
+/// computed and stored into the lookup for further use (groupProbe/joinProbe)
 void BaseHashTable::prepareForProbe(
     HashLookup& lookup,
     const RowVectorPtr& input,
