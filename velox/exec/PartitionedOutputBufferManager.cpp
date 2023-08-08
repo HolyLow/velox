@@ -72,15 +72,26 @@ std::vector<std::unique_ptr<folly::IOBuf>> DestinationBuffer::getData(
     loadData(arbitraryBuffer, maxBytes);
   }
 
+  /// anno: in this case, the required sequence is larger than produced max sequence,
+  ///  so it is an out-of-order get which cannot be served yet.
+  ///  so we record the notify_ callback and its required sequence, next time the
+  ///  data is produced, we will call the getAndClearNotify() to try to serve the
+  ///  buffered notify_ callback.
   if (sequence - sequence_ > data_.size()) {
     VLOG(0) << this << " Out of order get: " << sequence << " over "
             << sequence_ << " Setting second notify " << notifySequence_
             << " / " << sequence;
     notify_ = std::move(notify);
+    /// anno: todo: the min calculation is kind of strange...
     notifySequence_ = std::min(notifySequence_, sequence);
     notifyMaxBytes_ = maxBytes;
     return {};
   }
+  /// anno: in this case, the required sequence is exactly after the produced max
+  ///  sequence, so it is an in-order get which cannot be served yet.
+  ///  so we record the notify_ callback and its required sequence, next time the
+  ///  data is produced, we will call the getAndClearNotify() to try to serve the
+  ///  buffered notify_ callback.
   if (sequence - sequence_ == data_.size()) {
     notify_ = std::move(notify);
     notifySequence_ = sequence;
@@ -88,6 +99,9 @@ std::vector<std::unique_ptr<folly::IOBuf>> DestinationBuffer::getData(
     return {};
   }
 
+  /// anno: in this case, the required sequence is within the produced sequence,
+  ///  so the result could be served immediately, up to the tail of data_ or
+  ///  up to maxBytes.
   std::vector<std::unique_ptr<folly::IOBuf>> result;
   uint64_t resultBytes = 0;
   for (auto i = sequence - sequence_; i < data_.size(); ++i) {
@@ -115,6 +129,11 @@ void DestinationBuffer::enqueue(std::shared_ptr<SerializedPage> data) {
   data_.push_back(std::move(data));
 }
 
+/// anno: each time new data is enqueued into the buffer, getAndClearNotify()
+///  should be called. This function constructs result for any pending notify_
+///  callback, return the result-with-callback, and the callback will be called
+///  to return the result.
+///  In a word, this function issues the existing pending consumer callbacks.
 DataAvailable DestinationBuffer::getAndClearNotify() {
   if (notify_ == nullptr) {
     return DataAvailable();
@@ -566,6 +585,8 @@ bool PartitionedOutputBuffer::deleteResults(int destination) {
   // Outside of mutex.
   dataAvailable.notify();
 
+  /// anno: todo: if this case happened, will there be memory leaking as the
+  ///  producer might continue to dump data to this outputBuffer???
   if (!promises.empty()) {
     VLOG(1) << "Delete of results unblocks producers. Can happen in early end "
             << "due to error or limit";
@@ -577,6 +598,19 @@ bool PartitionedOutputBuffer::deleteResults(int destination) {
   return isFinished;
 }
 
+/// anno: this is the entrance of consume data, acknowledge and release data,
+///  drive blocked producer when size is not saturated.
+///  Ack: the consumption requirement of #sequence also means the ack of
+///   all the sequence below it (unless it is out-of-order and get detected).
+///   anno: todo: this means the acks must come in order... is this guaranteed?
+///  Consume: the consumption callback will be called immediately if data is
+///   available, otherwise the callback is saved.
+///  Produce: the consumption ack will reduce the buffer's data volume, and there
+///   might be pending producers. so if the totalSize is below continueSize,
+///   the producer's future (promises) will be set to notify the producers that
+///   they could continue to produce data.
+///  also note that after getData, the exchangeclient is expected to call
+///   acknowledge or deleteResult (if data is atEnd) manually.
 void PartitionedOutputBuffer::getData(
     int destination,
     uint64_t maxBytes,

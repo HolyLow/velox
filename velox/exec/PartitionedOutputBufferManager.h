@@ -127,7 +127,7 @@ class DestinationBuffer {
   uint64_t notifyMaxBytes_{0};
 };
 
-/// anno: the manage hierachy is :
+/// anno: the manage hierarchy is :
 /// PartitionedOutputBufferManager : Singleton, has all taskIds' PartitionedBuffer
 /// -> PartitionedOutputBuffer : For each taskId, has all the destination buffer
 /// ----> DestinationBuffer: For each destination, contains the bufferData

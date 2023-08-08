@@ -70,6 +70,12 @@ void VectorHasher::hashValues(
     bool mix,
     uint64_t* result) {
   using T = typename TypeTraits<Kind>::NativeType;
+  /// anno: in constantMapping, use a constant hash is enough because all the
+  ///         values are the same;
+  ///       in identityMapping, compute hash each time a row is accessed as
+  ///         all the values are different;
+  ///       in other mapping, use cached hashes because there might be index
+  ///         overlapping and could reuse hash values;
   if (decoded_.isConstantMapping()) {
     auto hash = decoded_.isNullAt(rows.begin())
         ? kNullHash

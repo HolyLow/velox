@@ -32,6 +32,7 @@ BlockingReason Destination::advance(
     return BlockingReason::kNotBlocked;
   }
   /// anno: todo: what does targeSizePct_ mean?
+  /// ans: the percentage of maxBytes, if reached, flush directly.
   uint32_t adjustedMaxBytes = std::max(
       PartitionedOutput::kMinDestinationSize,
       (maxBytes * targetSizePct_) / 100);
@@ -61,6 +62,20 @@ BlockingReason Destination::advance(
   return BlockingReason::kNotBlocked;
 }
 
+/// anno: the serialization is carried out in columnar method actually.
+///  all the values will get flatten, all the null/nonnull flags are written,
+///  null values are empty (only non-null values are written).
+
+/// anno: current_ is a VectorStreamGroup, which uses a VectorSerde to create
+///  serializer. The VectorSerde could be registered or specified.
+///  The PrestoSerializer has a separate VectorStream for each column, and
+///  each column is serialized separately. In a VectorStream, the nullsFlag,
+///  values are serialized and stored in separate ByteStream.
+///  So the class relationship is:
+///  VectorStreamGroup -> [use] VectorSerde
+///                    -> [factory create] PrestoSerializer
+///                    -> [each column use] VectorStream
+///                    -> [each value domain use] ByteStream
 void Destination::serialize(
     const RowVectorPtr& output,
     vector_size_t begin,
@@ -77,6 +92,10 @@ void Destination::serialize(
   current_->append(output, folly::Range(&rows_[begin], end - begin));
 }
 
+/// anno: this flush transfers data from current_ (VectorStreamGroup) to
+///  stream (IOBufOutputStream). The encoding is done when flushing!
+///  With PrestoSerializer, no compression is used, only crc verification
+///  encoding is used.
 BlockingReason Destination::flush(
     PartitionedOutputBufferManager& bufferManager,
     const std::function<void()>& bufferReleaseFn,
@@ -187,6 +206,7 @@ void PartitionedOutput::initializeSizeBuffers() {
   }
 }
 
+/// anno: todo: why estimate row by row? what for???
 void PartitionedOutput::estimateRowSizes() {
   auto numInput = input_->size();
   std::fill(rowSize_.begin(), rowSize_.end(), 0);
@@ -227,6 +247,7 @@ void PartitionedOutput::addInput(RowVectorPtr input) {
 
       vector_size_t start = 0;
       if (!replicatedAny_) {
+        /// anno: todo: why is the row0 replicated to all destinations?
         for (auto& destination : destinations_) {
           destination->addRow(0);
         }
@@ -267,7 +288,8 @@ void PartitionedOutput::collectNullRows() {
     if (keyVector->mayHaveNulls()) {
       decodedVectors_[i].decode(*keyVector, rows_);
       if (auto* rawNulls = decodedVectors_[i].nulls()) {
-        /// anno: figure out why is the orWithNEGATEDbits....
+        /// anno: !rawNulls[i] means the row is null, which should be marked true
+        ///  in nullRows_
         bits::orWithNegatedBits(
             nullRows_.asMutableRange().bits(), rawNulls, 0, size);
       }
@@ -276,6 +298,10 @@ void PartitionedOutput::collectNullRows() {
   nullRows_.updateBounds();
 }
 
+/// anno: In addInput, only the partitioning is recorded.
+///       In getOutput, the real computation (materializing the data, inserting
+///         to the destinationBuffer...) is carried out.
+///       WARN: CAUTION: This is different from Xihe's code...
 RowVectorPtr PartitionedOutput::getOutput() {
   if (finished_) {
     return nullptr;
